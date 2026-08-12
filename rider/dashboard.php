@@ -4,7 +4,7 @@ require_role('rider');
 
 $rider = current_rider();
 $pageTitle = 'Rider Dashboard';
-$assigned = db()->prepare('SELECT p.id, p.tracking_number, p.customer_name, p.customer_address, p.status, p.created_at FROM parcels p WHERE p.assigned_rider_id = ? ORDER BY p.id DESC LIMIT 6');
+$assigned = db()->prepare('SELECT p.id, p.tracking_number, p.customer_name, p.customer_address, p.status, p.created_at FROM parcels p INNER JOIN parcel_status_history h ON p.id = h.parcel_id WHERE p.assigned_rider_id = ? AND p.status = "Pending" ORDER BY p.id DESC LIMIT 6');
 $assigned->execute([$rider['id']]);
 $parcels = $assigned->fetchAll();
 $historyCount = count_value('SELECT COUNT(*) FROM parcel_status_history WHERE rider_id = ?', [$rider['id']]);
