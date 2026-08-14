@@ -4,7 +4,14 @@ require_role('rider');
 
 $rider = current_rider();
 $pageTitle = 'Rider Dashboard';
-$assigned = db()->prepare('SELECT p.id, p.tracking_number, p.customer_name, p.customer_address, p.status, p.created_at FROM parcels p INNER JOIN parcel_status_history h ON p.id = h.parcel_id WHERE p.assigned_rider_id = ? AND p.status = "Pending" ORDER BY p.id DESC LIMIT 6');
+$assigned = db()->prepare('
+    SELECT p.id, p.tracking_number, p.customer_name, p.customer_address, p.status, p.created_at 
+    FROM parcels p 
+    LEFT JOIN parcel_status_history h ON p.id = h.parcel_id 
+    WHERE p.assigned_rider_id = ? AND p.status = "Pending" 
+    GROUP BY p.id
+    ORDER BY p.id DESC LIMIT 6
+');
 $assigned->execute([$rider['id']]);
 $parcels = $assigned->fetchAll();
 $historyCount = count_value('SELECT COUNT(*) FROM parcel_status_history WHERE rider_id = ?', [$rider['id']]);
@@ -55,7 +62,7 @@ include __DIR__ . '/../includes/header.php';
                         <td><?= e($parcel['tracking_number']) ?></td>
                         <td><?= e($parcel['customer_name']) ?></td>
                         <td><?= e($parcel['status']) ?></td>
-                        <td><a class="secondary-button" href="<?= url('rider/parcel_view.php?id=' . (int) $parcel['id']) ?>">Open</a></td>
+                        <td><a href="navigation.php?id=<?= (int) $parcel['id'] ?>" class="primary-button">Open</a></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>

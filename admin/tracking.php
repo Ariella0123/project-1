@@ -4,6 +4,9 @@ require_role('admin');
 $pageTitle = 'Live Tracking';
 include __DIR__ . '/../includes/header.php';
 ?>
+<!-- 💡 1. 引入 Leaflet 的 CSS 样式文件，修复瓦片定位与错位问题 -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
 <div class="panel">
     <div class="toolbar">
         <div>
@@ -12,42 +15,64 @@ include __DIR__ . '/../includes/header.php';
         </div>
         <button class="secondary-button" id="refreshMapButton" type="button">Refresh</button>
     </div>
-    <div id="trackingMap" class="map-box"></div>
+    <div id="trackingMap" class="map-box" style="height: 500px; width: 100%;"></div>
 </div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 (async () => {
     const map = L.map('trackingMap').setView([3.1390, 101.6869], 12);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
+        maxZoom: 19, 
+        attribution: '&copy; OpenStreetMap contributors' 
+    }).addTo(map);
+
     let markers = [];
 
     async function loadRiders() {
         markers.forEach((marker) => marker.remove());
         markers = [];
-        const response = await fetch('<?= url('api/map_data.php') ?>', { credentials: 'same-origin' });
-        const data = await response.json();
-        const bounds = [];
-        (data.riders || []).forEach((rider) => {
-            if (!rider.latitude || !rider.longitude) return;
-            const popup = document.createElement('div');
-            const title = document.createElement('strong');
-            title.textContent = rider.name;
-            popup.appendChild(title);
-            popup.appendChild(document.createElement('br'));
-            popup.appendChild(document.createTextNode(`Status: ${rider.current_status}`));
-            popup.appendChild(document.createElement('br'));
-            popup.appendChild(document.createTextNode(`Updated: ${rider.last_location_at || 'n/a'}`));
-            const marker = L.marker([rider.latitude, rider.longitude]).addTo(map);
-            marker.bindPopup(popup);
-            markers.push(marker);
-            bounds.push([rider.latitude, rider.longitude]);
-        });
-        if (bounds.length > 0) {
-            map.fitBounds(bounds, { padding: [25, 25] });
+        
+        try {
+            const response = await fetch('<?= url('api/map_data.php') ?>', { credentials: 'same-origin' });
+            const data = await response.json();
+            const bounds = [];
+
+            (data.riders || []).forEach((rider) => {
+                if (!rider.latitude || !rider.longitude) return;
+                const popup = document.createElement('div');
+                const title = document.createElement('strong');
+                title.textContent = rider.name;
+                popup.appendChild(title);
+                popup.appendChild(document.createElement('br'));
+                popup.appendChild(document.createTextNode(`Status: ${rider.current_status}`));
+                popup.appendChild(document.createElement('br'));
+                popup.appendChild(document.createTextNode(`Updated: ${rider.last_location_at || 'n/a'}`));
+                
+                const marker = L.marker([rider.latitude, rider.longitude]).addTo(map);
+                marker.bindPopup(popup);
+                markers.push(marker);
+                bounds.push([rider.latitude, rider.longitude]);
+            });
+
+            if (bounds.length > 0) {
+                map.fitBounds(bounds, { padding: [25, 25] });
+            }
+        } catch (e) {
+            console.error('Failed to load rider coordinates:', e);
         }
+
+        // 💡 2. 每次加载完数据后，强制重新计算地图容器尺寸并重新渲染瓦片
+        map.invalidateSize();
     }
 
+    // 💡 3. 初始化加载时稍作延迟，确保 DOM 容器尺寸计算完毕
+    setTimeout(() => {
+        map.invalidateSize();
+    }, 200);
+
     await loadRiders();
+
     document.getElementById('refreshMapButton').addEventListener('click', loadRiders);
     setInterval(loadRiders, 20000);
 })();

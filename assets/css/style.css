@@ -534,10 +534,10 @@ textarea {
 }
 
 .map-box {
-    height: 420px;
-    border-radius: 18px;
+    width: 100%;
+    height: 350px; /* 必须有明确的高度，不能是 height: 100% 除非父级也有高度 */
+    border-radius: 8px;
     overflow: hidden;
-    border: 1px solid var(--line);
 }
 
 .camera-preview {

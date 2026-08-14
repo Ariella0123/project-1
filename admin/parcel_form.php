@@ -60,7 +60,7 @@ include __DIR__ . '/../includes/header.php';
 ?>
 
 <style>
-/* 自动搜索下拉框样式 */
+/* 自动搜索下拉框样式强化 */
 .autocomplete-container {
     position: relative;
     width: 100%;
@@ -73,17 +73,20 @@ include __DIR__ . '/../includes/header.php';
     background: #ffffff;
     border: 1px solid #cbd5e1;
     border-radius: 6px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    z-index: 1000;
-    max-height: 220px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    z-index: 9999 !important; /* 确保强行浮在最上层 */
+    max-height: 250px;
     overflow-y: auto;
     display: none;
+    margin-top: 4px;
 }
 .suggestion-item {
     padding: 10px 14px;
     cursor: pointer;
     font-size: 14px;
+    line-height: 1.4;
     border-bottom: 1px solid #f1f5f9;
+    color: #1e293b;
 }
 .suggestion-item:last-child {
     border-bottom: none;
@@ -103,7 +106,7 @@ include __DIR__ . '/../includes/header.php';
         
         <label>Delivery Address
             <div class="autocomplete-container" style="margin-top: 4px;">
-                <input type="text" id="customer_address" name="customer_address" value="<?= e(old('customer_address', $parcel['customer_address'] ?? '')) ?>" placeholder="Type an address (e.g. KLCC, Pavilion...)" autocomplete="off" required style="width: 100%;">
+                <input type="text" id="customer_address" name="customer_address" value="<?= e(old('customer_address', $parcel['customer_address'] ?? '')) ?>" placeholder="Type an address (e.g. sunway, klcc...)" autocomplete="off" required style="width: 100%;">
                 <div id="address_suggestions" class="autocomplete-suggestions"></div>
             </div>
         </label>
@@ -149,38 +152,51 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let debounceTimer;
 
-    // 监听输入框打字事件
     addressInput.addEventListener('input', () => {
         clearTimeout(debounceTimer);
         const query = addressInput.value.trim();
 
-        if (query.length < 3) {
+        if (query.length < 2) {
             suggestionsBox.style.display = 'none';
             return;
         }
 
-        // 防抖处理：等待用户停止打字 300ms 后才发送 API 请求
+        // 显示搜索中状态提示
+        suggestionsBox.innerHTML = '<div class="suggestion-item" style="color:#64748b;">Searching location...</div>';
+        suggestionsBox.style.display = 'block';
+
         debounceTimer = setTimeout(() => {
-            fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`)
+            // 使用 Photon API（基于 OpenStreetMap 的免费高速地名搜索）
+            fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5`)
                 .then(response => response.json())
                 .then(data => {
                     suggestionsBox.innerHTML = '';
-                    if (data.length === 0) {
-                        suggestionsBox.style.display = 'none';
+                    
+                    if (!data.features || data.features.length === 0) {
+                        suggestionsBox.innerHTML = '<div class="suggestion-item" style="color:#94a3b8;">No results found</div>';
                         return;
                     }
 
-                    // 渲染搜索到的匹配地址列表
-                    data.forEach(item => {
+                    data.features.forEach(feature => {
+                        const props = feature.properties;
+                        const coords = feature.geometry.coordinates; // [lng, lat]
+
+                        // 拼凑地名描述
+                        const name = props.name || '';
+                        const street = props.street || '';
+                        const city = props.city || props.town || props.state || '';
+                        const country = props.country || '';
+                        
+                        let fullAddress = [name, street, city, country].filter(Boolean).join(', ');
+
                         const div = document.createElement('div');
                         div.className = 'suggestion-item';
-                        div.textContent = item.display_name;
+                        div.textContent = fullAddress;
 
-                        // 当用户点击某一条建议时
                         div.addEventListener('click', () => {
-                            addressInput.value = item.display_name;
-                            latInput.value = parseFloat(item.lat).toFixed(6);
-                            lngInput.value = parseFloat(item.lon).toFixed(6);
+                            addressInput.value = fullAddress;
+                            latInput.value = parseFloat(coords[1]).toFixed(6); // lat
+                            lngInput.value = parseFloat(coords[0]).toFixed(6); // lng
                             suggestionsBox.style.display = 'none';
                         });
 
@@ -190,12 +206,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     suggestionsBox.style.display = 'block';
                 })
                 .catch(err => {
-                    console.error('Error fetching address recommendations:', err);
+                    console.error('API Error:', err);
+                    suggestionsBox.innerHTML = '<div class="suggestion-item" style="color:#ef4444;">Unable to search address</div>';
                 });
-        }, 300);
+        }, 250);
     });
 
-    // 点击页面其他空白地方时隐藏下拉建议列表
     document.addEventListener('click', (e) => {
         if (!addressInput.contains(e.target) && !suggestionsBox.contains(e.target)) {
             suggestionsBox.style.display = 'none';
